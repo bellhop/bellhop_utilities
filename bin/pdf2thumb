@@ -14,26 +14,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-################################################################################
 # Make sure that you have the right number of inputs
 if [ "$#" -ne 1 ]
   then
-    echo -e "\nUsage: 4cu_pdf2thumb [pdf file name]"
-    echo -e "\nNOTE: One inputs require\n"
+    echo -e "\nUsage: pdf2thumb [pdf file name]"
+    echo -e "\nNOTE: One input require\n"
     exit 1
 fi
 
+# Set the variables that will be used
 tempFile=${1%.pdf}_temp.pdf
 outFile=${1%.pdf}.jpg
 
+# Ues ghostscript to pullout first page
 gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER \
    -dFirstPage=1 \
    -dLastPage=1 \
    -sOutputFile=$tempFile \
    ${1}
 
+# Convert to jpeg format
 sips -s format jpeg $tempFile --out $outFile
 
+# Resize for use on website
 sips --resampleHeightWidth 480 360 $outFile
 
+# Remove temp file
 rm $tempFile
