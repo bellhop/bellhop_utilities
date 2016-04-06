@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+
+# Copyright 2016 Stephen Porter
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Make sure that you have the right number of inputs
+if [ "$#" -ne 1 ]
+  then
+    echo -e "\nUsage: 4cu_photos2jekyll [file location]"
+    echo -e "\nNOTE: One input require\n"
+    exit 1
+fi
+
+# Make sure the file type is a directory
+if [ ! -d "$1" ]
+  then
+    echo -e "\nThe input must be a directory\n"
+    exit 1
+fi
+
+# Set the working locations and files
+inputDir=$1
+outputDir="web-output"
+slugName="$(echo -n $(basename $1) | sed -e 's/[^[:alnum:]]/-/g' | tr -s '-' | tr [:upper:] [:lower:])"
+fileName="$slugName.md"
+imagePath="$slugName-photos"
+tempFile="$RANDOM.temp$$"
+
+# Make output directory and directory to hold photos
+cd "$inputDir"
+if [ -d $outputDir ]
+  then
+    rm -R $outputDir
+fi
+mkdir $outputDir
+cd $outputDir
+mkdir $imagePath
+
+# Touch the file that will be used to make the webpage
+touch $fileName
+
+# Start the file with yaml data
+cat <<EOT >> $fileName
+---
+title:     $(echo -n $(basename $1))
+layout:    photo-album
+imagePath: $imagePath
+images:
+EOT
+
+# Create a temp file to load the photo names into
+touch $tempFile
+
+# Find all of the photos and what directory they are in
+find .. \( -name *.jpg -o -name *.jpeg \) -print > $tempFile
+
+# Reset imageCtr to 1
+imageCtr=1
+
+# Loop through the found pictures
+while read line
+do
+  # Set who took the photo based on the folder name and add this to the yaml
+  photoTaker=$(echo $(dirname "$line") | tr -d '../')
+  echo "  - who: \"$photoTaker\"" >> $fileName
+  # Set the name for the image file and copy it to the output directory
+  imageName=$slugName-$imageCtr
+  cp "$line" "$imagePath/$imageName.jpg"
+  # Resize the image and make sure the copyright key is set
+  sips --resampleHeightWidthMax 1024 "$imagePath/$imageName.jpg"
+  sips --setProperty copyright "$photoTaker" "$imagePath/$imageName.jpg"
+  # Add value to yaml
+  echo "    imageName: $imageName.jpg" >> $fileName
+  # Create the thumbnail image and set it's size then add to yaml
+  cp "$imagePath/$imageName.jpg" "$imagePath/$imageName-thumb.jpg"
+  sips --resampleHeightWidthMax 250 "$imagePath/$imageName-thumb.jpg"
+  echo "    thumbName: $imageName-thumb.jpg" >> $fileName
+  # Increment the counter
+  ((imageCtr++))
+done < $tempFile
+
+# Remove temp file
+rm $tempFile
+
+# Close the yaml section with three dashes
+cat <<EOT >> $fileName
+---
+EOT
