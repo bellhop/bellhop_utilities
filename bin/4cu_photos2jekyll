@@ -29,13 +29,14 @@ if [ ! -d "$1" ]
     exit 1
 fi
 
-# Set the working locations and files
+# Set the working locations, files, and defines
 inputDir=$1
 outputDir="web-output"
 slugName="$(echo -n $(basename $1) | sed -e 's/[^[:alnum:]]/-/g' | tr -s '-' | tr [:upper:] [:lower:])"
 fileName="$slugName.md"
 imagePath="$slugName-photos"
 tempFile="$RANDOM.temp$$"
+THUMB_SIZE=150
 
 # Make output directory and directory to hold photos
 cd "$inputDir"
@@ -84,7 +85,21 @@ do
   echo "    imageName: $imageName.jpg" >> $fileName
   # Create the thumbnail image and set it's size then add to yaml
   cp "$imagePath/$imageName.jpg" "$imagePath/$imageName-thumb.jpg"
-  sips --resampleHeightWidthMax 250 "$imagePath/$imageName-thumb.jpg"
+  # Get the with and height of the image
+  checkWith=$(sips --getProperty pixelWidth "$imagePath/$imageName-thumb.jpg" | grep pixelWidth | grep -Eo "\d+")
+echo $checkWith
+  checkHeight=$(sips --getProperty pixelHeight "$imagePath/$imageName-thumb.jpg" | grep pixelHeight | grep -Eo "\d+")
+echo $checkHeight
+  # Based on the size of the image set the min with or height to the thumbnail size
+  if [ $checkWith -lt $checkHeight ]
+    then
+      sips --resampleWidth $THUMB_SIZE "$imagePath/$imageName-thumb.jpg"
+    else
+      sips --resampleHeight $THUMB_SIZE "$imagePath/$imageName-thumb.jpg"
+  fi
+  # Crop off the extra image so you end up eith a square thumbnail
+  sips --cropToHeightWidth $THUMB_SIZE $THUMB_SIZE "$imagePath/$imageName-thumb.jpg"
+  # Write the yaml info out
   echo "    thumbName: $imageName-thumb.jpg" >> $fileName
   # Increment the counter
   ((imageCtr++))
