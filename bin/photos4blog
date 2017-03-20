@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+
+# Copyright 2017 Stephen Porter
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# :; exec magick -script "$0" "$@"; exit 10
+
+# Make sure that you have the right number of inputs
+if [ "$#" -ne 1 ]
+  then
+    echo -e "\nUsage: photos4blog [file location]"
+    echo -e "\nNOTE: One input require, a directory of images in jpg or jpeg only\n"
+    echo -e "\nThe directory name shoud follow this format\n"
+    echo -e "[year] [month] [day] Title of Photo Album\n"
+    echo -e "Example: 2016-05-30 Yellowstone National Park\n"
+    exit 1
+fi
+
+# Make sure the file type is a directory
+if [ ! -d "$1" ]
+  then
+    echo -e "\nThe input must be a directory\n"
+    exit 1
+fi
+
+# Set the working locations, files, and defines
+echo "Setting up file information"
+inputDir=$1
+outputDir="web-output"
+slugName="$(echo -n $(basename $1) | sed -e 's/[^[:alnum:]]/-/g' | tr -s '-' | tr [:upper:] [:lower:])"
+titleName="$(echo -n $slugName | sed -e 's/\(-[0-9][0-9]\)\{2\}//g' | tr - ' ' | sed -e 's/\\b[a-z]/\\u\&/g')"
+imageStartName="$(echo $titleName | sed -e 's/[^[:alnum:]]/-/g' | tr -s '-' | tr [:upper:] [:lower:])"
+echo "$titleName and $imageStartName"
+exit 0
+
+fileName="$slugName.md"
+imagePath="$slugName-photos"
+tempFile="$RANDOM.temp$$"
+THUMB_SIZE=150
+
+# Make output directory and directory to hold photos
+cd "$inputDir"
+if [ -d $outputDir ]
+  then
+    rm -R $outputDir
+fi
+mkdir $outputDir
+cd $outputDir
+mkdir $imagePath
+
+# Touch the file that will be used to make the webpage
+touch $fileName
+
+# Start the file with yaml data
+cat <<EOT >> $fileName
+---
+title:     $titleName
+layout:    photo-album
+imagePath: $imagePath
+images:
+EOT
+
+# Create a temp file to load the photo names into
+touch $tempFile
+
+# Find only the jpg or jpeg images
+echo "Looking for jpg or jpeg images"
+find .. \( -name *.jpg -o -name *.jpeg \) -print > $tempFile
+
+# Reset imageCtr to 1
+imageCtr=1
+
+# Loop through the found pictures
+echo -n "Processing images"
+while read inputFile
+do
+  # Set default title for image
+  echo "  - title: $titleName" >> $fileName
+  # Set the name for the image output file
+  imageName=$imageStartName-$imageCtr
+  # Resize the image and store the output
+  convert "$inputFile" -resize '1024x1024>' "$imagePath/$imageName.jpg"
+  # Add value to yaml
+  echo "    imageName: $imageName.jpg" >> $fileName
+  # Create the thumbnail image and set it's size then add to yaml
+  convert "$imagePath/$imageName.jpg" -thumbnail '150x150^' -gravity center -extent '150x150' "$imagePath/$imageName-thumb.jpg"
+  # Write the yaml info out
+  echo "    thumbName: $imageName-thumb.jpg" >> $fileName
+  # Increment the counter
+  ((imageCtr++))
+  echo -n "."
+done < $tempFile
+
+# Remove temp file
+rm $tempFile
+
+# Close the yaml section with three dashes
+cat <<EOT >> $fileName
+---
+EOT
+
+echo -e "\nProcessing complete"
